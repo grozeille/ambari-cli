@@ -9,17 +9,16 @@ class AmbariClient:
     def __init__(self):
         pass
 
-    def connect(self, ambari_ip, stack_name, https=False, port=8080):
+    def connect(self, ambari_ip, stack_name, https=False, port=8080, login="admin", password="admin"):
         self.ambari_url = '{0}://{1}:{2}'.format("https" if https else "http", ambari_ip, port)
         self.session = Session()
-        self.session.auth = ("admin", "admin")
+        self.session.auth = (login, password)
         self.session.headers.update({
-            'X-Requested-By': 'admin'
+            'X-Requested-By': login
         })
         self.stack_name = stack_name
-        self.cluster_host_groups = None
 
-    def create_cluster(self, config_folder, cluster_size, hdp_repo_url=None, hdp_util_repo_url=None):
+    def create_cluster(self, config_folder, cluster_host_groups, hdp_repo_url=None, hdp_util_repo_url=None):
 
         # wait for ambari to be ready
         while True:
@@ -56,7 +55,7 @@ class AmbariClient:
                 data=json.dumps(repositories))
             r.raise_for_status()
 
-        blueprint_json = self.build_config(config_folder)
+        blueprint_json = self.build_blueprint(config_folder)
 
         blueprint_name = 'blueprint'
 
@@ -71,7 +70,7 @@ class AmbariClient:
         cluster = {
             'blueprint': blueprint_name,
             'default_password': 'admin',
-            'host_groups': self.build_host_groups(config_folder, cluster_size)
+            'host_groups': cluster_host_groups
         }
 
         r = self.session.post(self.ambari_url + '/api/v1/clusters/' + self.stack_name, data=json.dumps(cluster))
@@ -135,46 +134,14 @@ class AmbariClient:
 
         logging.info("Cluster stopped")
 
-    def set_host_groups(self, cluster_host_groups):
-        self.cluster_host_groups = cluster_host_groups
-
-    def build_host_groups(self, config_folder, cluster_size):
-
-        if self.cluster_host_groups != None:
-            return self.cluster_host_groups
-
-
-        blueprint_json = self.build_config(config_folder)
-
-        result = []
-
-        for host_group in blueprint_json["host_groups"]:
-            name = host_group["name"]
-            cluster_host_group = {
-                'name': name,
-                'hosts': []
-            }
-
-            size = 1
-            if name == "host_group_datanode":
-                size = cluster_size
-
-            for cpt in range(1, size + 1):
-                cluster_host_group['hosts'].append(
-                    {'fqdn': '{0}-ambari-agent-{1}-{2}'.format(self.stack_name, name[11:], cpt)})
-
-                result.append(cluster_host_group)
-
-        return result
-
-    def update_cluster(self, config_folder, cluster_size):
+    def update_cluster(self, config_folder, cluster_host_groups):
 
         r = self.session.get(self.ambari_url + '/api/v1/clusters/' + self.stack_name + '?fields=service_config_versions,Clusters/desired_service_config_versions')
         r.raise_for_status()
 
         service_json = r.json()
 
-        blueprint = self.build_config(config_folder)
+        blueprint = self.build_blueprint(config_folder)
 
         new_configs = {}
         for config_item in blueprint["configurations"]:
@@ -200,7 +167,7 @@ class AmbariClient:
                 original_config = config
                 new_config = new_configs[config["type"]]
 
-                diff_config = self.get_config_diff(config_folder, original_config, new_config, cluster_size)
+                diff_config = self.get_config_diff(original_config, new_config, cluster_host_groups)
 
                 if diff_config != None:
                     update_config = {
@@ -223,10 +190,8 @@ class AmbariClient:
                     r = self.session.put(self.ambari_url + "/api/v1/clusters/{0}".format(self.stack_name), data=json.dumps(update_config))
                     r.raise_for_status()
 
-    def get_config_diff(self, config_folder, original, new, cluster_size):
+    def get_config_diff(self, original, new, cluster_host_groups):
         contains_diff = False
-
-        host_groups = self.build_host_groups(config_folder, cluster_size)
 
         diff = {
             "properties": {},
@@ -241,7 +206,7 @@ class AmbariClient:
             original_value = original["properties"][key]
             new_value = new["properties"].get(key)
             if new_value != None:
-                new_value = self.replace_group_to_host(new_value, host_groups)
+                new_value = self.replace_group_to_host(new_value, cluster_host_groups)
 
                 if original_value != new_value:
                     diff["properties"][key] = new_value
@@ -302,7 +267,7 @@ class AmbariClient:
         else:
             return True
 
-    def build_config(self, config_folder):
+    def build_blueprint(self, config_folder):
 
         blueprint_file = os.path.join(config_folder, "blueprint.json")
         blueprint = {}
@@ -311,7 +276,7 @@ class AmbariClient:
             blueprint = json.load(file)
 
         # get the list of components to install
-        services = [ 'CLUSTER' ]
+        services = [ ]
         for host_group in blueprint["host_groups"]:
             for service in host_group["components"]:
                 service = self.get_service_from_component(service['name'])
@@ -341,13 +306,31 @@ class AmbariClient:
 
         return blueprint
 
-    def dump_config(self, config_folder, cluster_size):
+    def dump_config(self, config_folder, cluster_host_groups=None):
+
+        if cluster_host_groups == None:
+            logging.warning("cluster_host_groups is not provided, configuration will have hostnames hardcoded instead of hostgroups")
+
+        if not os.path.exists(config_folder):
+            os.makedirs(config_folder)
+
+        blueprint_file = os.path.join(config_folder, "blueprint.json")
+        if not os.path.isfile(blueprint_file):
+            logging.info("No blueprint file, dumping it")
+
+            r = self.session.get(self.ambari_url + '/api/v1/clusters/' + self.stack_name + '?format=blueprint')
+            r.raise_for_status()
+            blueprint = r.json()
+            # remove configurations
+            blueprint["configurations"] = []
+
+            with open(blueprint_file, 'w') as file:
+                json.dump(blueprint, file, sort_keys=True, indent=4, separators=(',', ': '))
+
         r = self.session.get(self.ambari_url + '/api/v1/clusters/' + self.stack_name + '?fields=service_config_versions,Clusters/desired_service_config_versions')
         r.raise_for_status()
 
         service_json = r.json()
-
-        host_groups = self.build_host_groups(config_folder, cluster_size)
 
         # build a json per service with all configs
         service_config_json = {}
@@ -404,8 +387,8 @@ class AmbariClient:
                         config["properties"][property] = content_file
                         with open(content_file_path, 'w') as file:
                             file.write(content)
-                    else:
-                        config["properties"][property] = self.replace_host_to_group(config["properties"][property], host_groups)
+                    elif cluster_host_groups != None:
+                        config["properties"][property] = self.replace_host_to_group(config["properties"][property], cluster_host_groups)
 
 
             config_file = os.path.join(config_folder, service_key, "{0}.json".format(service_key))
@@ -471,6 +454,12 @@ class AmbariClient:
                 "HIVE_SERVER_INTERACTIVE",
                 "MYSQL_SERVER",
                 "WEBHCAT_SERVER"
+            ],
+            "SPARK": [
+                "LIVY_SERVER",
+                "SPARK_CLIENT",
+                "SPARK_JOBHISTORYSERVER",
+                "SPARK_THRIFTSERVER"
             ],
             "SPARK2" : [
                 "LIVY2_SERVER",
