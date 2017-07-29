@@ -1,0 +1,6 @@
+#!/usr/bin/env python
+if __name__ == '__main__':
+    import sys
+    import ambari_cli
+
+    sys.exit(ambari_cli.main())
