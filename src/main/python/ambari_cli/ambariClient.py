@@ -17,10 +17,9 @@ class AmbariClient:
             'X-Requested-By': 'admin'
         })
         self.stack_name = stack_name
+        self.cluster_host_groups = None
 
     def create_cluster(self, config_folder, cluster_size, hdp_repo_url=None, hdp_util_repo_url=None):
-
-        blueprint_file = os.path.join(config_folder, 'blueprint.json')
 
         # wait for ambari to be ready
         while True:
@@ -72,7 +71,7 @@ class AmbariClient:
         cluster = {
             'blueprint': blueprint_name,
             'default_password': 'admin',
-            'host_groups': self.build_host_groups(cluster_size)
+            'host_groups': self.build_host_groups(config_folder, cluster_size)
         }
 
         r = self.session.post(self.ambari_url + '/api/v1/clusters/' + self.stack_name, data=json.dumps(cluster))
@@ -162,9 +161,9 @@ class AmbariClient:
 
             for cpt in range(1, size + 1):
                 cluster_host_group['hosts'].append(
-                    {'fqdn': '{0}-ambari-agent-{1}-{2}'.format(self.stack_name, name, cpt)})
+                    {'fqdn': '{0}-ambari-agent-{1}-{2}'.format(self.stack_name, name[11:], cpt)})
 
-                result.append(host_group)
+                result.append(cluster_host_group)
 
         return result
 
@@ -201,7 +200,7 @@ class AmbariClient:
                 original_config = config
                 new_config = new_configs[config["type"]]
 
-                diff_config = self.get_config_diff(original_config, new_config, cluster_size)
+                diff_config = self.get_config_diff(config_folder, original_config, new_config, cluster_size)
 
                 if diff_config != None:
                     update_config = {
@@ -224,10 +223,10 @@ class AmbariClient:
                     r = self.session.put(self.ambari_url + "/api/v1/clusters/{0}".format(self.stack_name), data=json.dumps(update_config))
                     r.raise_for_status()
 
-    def get_config_diff(self, original, new, cluster_size):
+    def get_config_diff(self, config_folder, original, new, cluster_size):
         contains_diff = False
 
-        host_groups = self.build_host_groups(cluster_size)
+        host_groups = self.build_host_groups(config_folder, cluster_size)
 
         diff = {
             "properties": {},
@@ -348,7 +347,7 @@ class AmbariClient:
 
         service_json = r.json()
 
-        host_groups = self.build_host_groups(cluster_size)
+        host_groups = self.build_host_groups(config_folder, cluster_size)
 
         # build a json per service with all configs
         service_config_json = {}
