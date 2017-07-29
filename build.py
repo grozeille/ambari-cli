@@ -10,11 +10,12 @@ use_plugin("python.distutils")
 
 name = "ambari-cli"
 default_task = "publish"
-version = "1.0"
+version = "1.1"
 summary = "useful scripts to use the Ambari API"
 description = "useful scripts to use the Ambari API"
 author = "mathias.kluba@gmail.com"
 
 @init
 def set_properties(project):
+    project.depends_on_requirements("requirements.txt")
     pass
