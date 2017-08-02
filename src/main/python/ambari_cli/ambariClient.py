@@ -466,7 +466,19 @@ class AmbariClient:
                 "SPARK2_CLIENT",
                 "SPARK2_JOBHISTORYSERVER",
                 "SPARK2_THRIFTSERVER"
+            ],
+            "AMBARI_METRICS" : [
+                "METRICS_MONITOR",
+                "METRICS_COLLECTOR",
+                "METRICS_GRAFANA"
+            ],
+            "SMARTSENSE" : [
+                "ACTIVITY_ANALYZER",
+                "ACTIVITY_EXPLORER",
+                "HST_SERVER",
+                "HST_AGENT"
             ]
+
         }
 
         for service in component_services:
