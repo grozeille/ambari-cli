@@ -272,7 +272,7 @@ class AmbariClient:
         blueprint_file = os.path.join(config_folder, "blueprint.json")
         blueprint = {}
 
-        with open(blueprint_file, 'r') as file:
+        with open(blueprint_file, 'r', encoding='UTF8') as file:
             blueprint = json.load(file)
 
         # get the list of components to install
@@ -287,17 +287,17 @@ class AmbariClient:
         for service in services:
             config_json_file = os.path.join(config_folder, service, "{0}.json".format(service))
 
-            with open(config_json_file, 'r') as file:
+            with open(config_json_file, 'r', encoding='UTF8') as file:
                 config = json.load(file)
 
             for config_key in config["properties"]:
 
                 # read external files
                 for property_key in config["properties"][config_key]["properties"]:
-                    if property_key == "content":
+                    if str(property_key).endswith("content"):
                         file_name = config["properties"][config_key]["properties"][property_key]
                         file_path = os.path.join(config_folder, service, file_name)
-                        with open(file_path, 'r') as file:
+                        with open(file_path, 'r', encoding='UTF8') as file:
                             config["properties"][config_key]["properties"][property_key] = file.read()
 
                 blueprint["configurations"].append({
@@ -324,7 +324,7 @@ class AmbariClient:
             # remove configurations
             blueprint["configurations"] = []
 
-            with open(blueprint_file, 'w') as file:
+            with open(blueprint_file, 'w', encoding='UTF8') as file:
                 json.dump(blueprint, file, sort_keys=True, indent=4, separators=(',', ': '))
 
         r = self.session.get(self.ambari_url + '/api/v1/clusters/' + self.stack_name + '?fields=service_config_versions,Clusters/desired_service_config_versions')
@@ -377,7 +377,8 @@ class AmbariClient:
             for service_property in service_config["properties"]:
                 config = service_config["properties"][service_property]
                 for property in config["properties"]:
-                    if property == "content":
+                    if str(property).endswith("content"):
+                        logging.debug("Dumping content of the configuration file {0}-{1}".format(service_key, service_property))
                         extention = self.get_property_extension_file(service_property)
 
                         content_file = "{0}{1}".format(service_property, extention)
@@ -385,14 +386,14 @@ class AmbariClient:
 
                         content = config["properties"][property]
                         config["properties"][property] = content_file
-                        with open(content_file_path, 'w') as file:
+                        with open(content_file_path, 'w', encoding='UTF8') as file:
                             file.write(content)
                     elif cluster_host_groups != None:
                         config["properties"][property] = self.replace_host_to_group(config["properties"][property], cluster_host_groups)
 
 
             config_file = os.path.join(config_folder, service_key, "{0}.json".format(service_key))
-            with open(config_file, 'w') as file:
+            with open(config_file, 'w', encoding='UTF8') as file:
                 json.dump(service_config_json[service_key], file, sort_keys=True, indent=4, separators=(',', ': '))
 
     def get_property_extension_file(self, property):
@@ -406,10 +407,14 @@ class AmbariClient:
             extention = ".properties"
         elif property.endswith('.properties'):
             extention = ""
+        elif property.endswith('.ini'):
+            extention = ""
         elif property.endswith('-blacklist'):
             extention = ".properties"
         elif property.endswith('-logsearch-conf'):
             extention = ".json"
+        elif property == "spark2-thrift-fairscheduler":
+            extention = ".xml"
         else:
             extention = ".txt"
 
@@ -477,6 +482,9 @@ class AmbariClient:
                 "ACTIVITY_EXPLORER",
                 "HST_SERVER",
                 "HST_AGENT"
+            ],
+            "HUE" : [
+                "HUE_SERVER"
             ]
 
         }
