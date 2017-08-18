@@ -485,6 +485,13 @@ class AmbariClient:
             ],
             "HUE" : [
                 "HUE_SERVER"
+            ],
+            "SQOOP" : [
+                "SQOOP"
+            ],
+            "OOZIE" : [
+                "OOZIE_SERVER",
+                "OOZIE_CLIENT"
             ]
 
         }
