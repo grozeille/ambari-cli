@@ -326,7 +326,7 @@ class AmbariClient:
             blueprint["configurations"] = []
 
             with io.open(blueprint_file, 'w', encoding='UTF8') as file:
-                json.dump(blueprint, file, sort_keys=True, indent=4, separators=(',', ': '))
+                file.write(unicode(json.dumps(blueprint, ensure_ascii=False, sort_keys=True, indent=4, separators=(',', ': '))))
 
         r = self.session.get(self.ambari_url + '/api/v1/clusters/' + self.stack_name + '?fields=service_config_versions,Clusters/desired_service_config_versions')
         r.raise_for_status()
@@ -395,7 +395,7 @@ class AmbariClient:
 
             config_file = os.path.join(config_folder, service_key, "{0}.json".format(service_key))
             with io.open(config_file, 'w', encoding='UTF8') as file:
-                json.dump(service_config_json[service_key], file, sort_keys=True, indent=4, separators=(',', ': '))
+                 file.write(unicode(json.dumps(service_config_json[service_key], ensure_ascii=False, sort_keys=True, indent=4, separators=(',', ': '))))
 
     def get_property_extension_file(self, property):
         if property.endswith('-env'):
