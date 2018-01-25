@@ -4,6 +4,7 @@ import time
 import json
 import logging
 import os
+import io
 
 class AmbariClient:
     def __init__(self):
@@ -272,7 +273,7 @@ class AmbariClient:
         blueprint_file = os.path.join(config_folder, "blueprint.json")
         blueprint = {}
 
-        with open(blueprint_file, 'r', encoding='UTF8') as file:
+        with io.open(blueprint_file, 'r', encoding='UTF8') as file:
             blueprint = json.load(file)
 
         # get the list of components to install
@@ -287,7 +288,7 @@ class AmbariClient:
         for service in services:
             config_json_file = os.path.join(config_folder, service, "{0}.json".format(service))
 
-            with open(config_json_file, 'r', encoding='UTF8') as file:
+            with io.open(config_json_file, 'r', encoding='UTF8') as file:
                 config = json.load(file)
 
             for config_key in config["properties"]:
@@ -297,7 +298,7 @@ class AmbariClient:
                     if str(property_key).endswith("content"):
                         file_name = config["properties"][config_key]["properties"][property_key]
                         file_path = os.path.join(config_folder, service, file_name)
-                        with open(file_path, 'r', encoding='UTF8') as file:
+                        with io.open(file_path, 'r', encoding='UTF8') as file:
                             config["properties"][config_key]["properties"][property_key] = file.read()
 
                 blueprint["configurations"].append({
@@ -324,7 +325,7 @@ class AmbariClient:
             # remove configurations
             blueprint["configurations"] = []
 
-            with open(blueprint_file, 'w', encoding='UTF8') as file:
+            with io.open(blueprint_file, 'w', encoding='UTF8') as file:
                 json.dump(blueprint, file, sort_keys=True, indent=4, separators=(',', ': '))
 
         r = self.session.get(self.ambari_url + '/api/v1/clusters/' + self.stack_name + '?fields=service_config_versions,Clusters/desired_service_config_versions')
@@ -386,14 +387,14 @@ class AmbariClient:
 
                         content = config["properties"][property]
                         config["properties"][property] = content_file
-                        with open(content_file_path, 'w', encoding='UTF8') as file:
+                        with io.open(content_file_path, 'w', encoding='UTF8') as file:
                             file.write(content)
                     elif cluster_host_groups != None:
                         config["properties"][property] = self.replace_host_to_group(config["properties"][property], cluster_host_groups)
 
 
             config_file = os.path.join(config_folder, service_key, "{0}.json".format(service_key))
-            with open(config_file, 'w', encoding='UTF8') as file:
+            with io.open(config_file, 'w', encoding='UTF8') as file:
                 json.dump(service_config_json[service_key], file, sort_keys=True, indent=4, separators=(',', ': '))
 
     def get_property_extension_file(self, property):
